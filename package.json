@@ -1,0 +1,32 @@
+{
+  "name": "arbor",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Graph-shaped chat for local LLMs: branch, merge, mute, summarize, and let models talk to each other.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit -p tsconfig.json && vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node tests/context.test.ts",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@dagrejs/dagre": "^3.1.3",
+    "@xyflow/react": "^12.12.1",
+    "idb-keyval": "^6.3.0",
+    "lucide-react": "^1.70.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "zustand": "^5.0.16"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.2.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.6"
+  }
+}
