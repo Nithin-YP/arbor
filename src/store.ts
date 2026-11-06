@@ -46,7 +46,16 @@ const toRf = (n: GNode, selected = false): Node => ({
 
 export type Modal = null | 'library' | 'settings' | 'dialogue' | 'models'
 export type Tab = 'thread' | 'context' | 'node'
-type Toast = { id: number; text: string; kind: 'info' | 'error' }
+type ToastAction = { label: string; run: () => void }
+type Toast = { id: number; text: string; kind: 'info' | 'error'; action?: ToastAction }
+
+/** Everything needed to put a deletion back exactly as it was. */
+export interface DeletedSnapshot {
+  graphId: string
+  removed: GNode[] // the deleted nodes, as they were
+  rf: Node[] // their canvas entries (positions, measured sizes)
+  patched: GNode[] // survivors whose parent list was trimmed, as they were before
+}
 
 interface NewNode {
   parents: string[]
@@ -82,7 +91,7 @@ export interface State {
   setModal(m: Modal): void
   setTab(t: Tab): void
   toggleInspector(): void
-  showToast(text: string, kind?: Toast['kind']): void
+  showToast(text: string, kind?: Toast['kind'], action?: ToastAction): void
   setSettings(p: Partial<AppSettings>): void
   refreshModels(): Promise<void>
 
@@ -108,7 +117,8 @@ export interface State {
   toggleMute(id: string): void
   summarize(id: string): void
   editAndBranch(id: string): void
-  deleteNodes(ids: string[]): void
+  deleteNodes(ids: string[]): DeletedSnapshot | null
+  restoreDeleted(snap: DeletedSnapshot): boolean
   runDialogue(cfg: DialogueConfig): Promise<void>
 }
 
@@ -184,10 +194,12 @@ export const useStore = create<State>()((set, get) => {
     setTab: (tab) => set({ tab, inspectorOpen: true }),
     toggleInspector: () => set((s) => ({ inspectorOpen: !s.inspectorOpen })),
 
-    showToast(text, kind = 'info') {
+    showToast(text, kind = 'info', action) {
       const id = ++toastSeq
-      set({ toast: { id, text, kind } })
-      setTimeout(() => get().toast?.id === id && set({ toast: null }), kind === 'error' ? 6000 : 3000)
+      set({ toast: { id, text, kind, action } })
+      // Toasts with an action (Undo) stay up long enough to reach for the button.
+      const ms = action ? 8000 : kind === 'error' ? 6000 : 3000
+      setTimeout(() => get().toast?.id === id && set({ toast: null }), ms)
     },
 
     setSettings(p) {
@@ -454,15 +466,18 @@ export const useStore = create<State>()((set, get) => {
 
     deleteNodes(ids) {
       const s = get()
-      const kill = deletionClosure(s.graph, ids)
+      const kill = deletionClosure(s.graph, ids.filter((id) => s.graph.nodes[id]))
+      if (!kill.size) return null
       for (const id of kill) controllers.get(id)?.abort()
       const nodes: Record<string, GNode> = {}
+      const patched: GNode[] = []
       for (const [id, n] of Object.entries(s.graph.nodes)) {
         if (kill.has(id)) continue
-        // A merge that lost one parent survives, but its context changed.
-        nodes[id] = n.parents.some((p) => kill.has(p))
-          ? { ...n, parents: n.parents.filter((p) => !kill.has(p)), stale: !!n.response }
-          : n
+        if (n.parents.some((p) => kill.has(p))) {
+          // A merge that lost one parent survives, but its context changed.
+          patched.push(n)
+          nodes[id] = { ...n, parents: n.parents.filter((p) => !kill.has(p)), stale: !!n.response }
+        } else nodes[id] = n
       }
       const graph = { ...s.graph, nodes, updatedAt: Date.now() }
       const selection = s.selection.filter((x) => !kill.has(x))
@@ -473,6 +488,36 @@ export const useStore = create<State>()((set, get) => {
         pathSet: contextNodeSet(graph, selection),
         structVersion: s.structVersion + 1,
       })
+      return {
+        graphId: s.graph.id,
+        removed: [...kill].map((id) => s.graph.nodes[id]),
+        rf: s.rfNodes.filter((n) => kill.has(n.id)),
+        patched,
+      }
+    },
+
+    restoreDeleted(snap) {
+      const s = get()
+      if (s.graph.id !== snap.graphId) return false // a different graph is open now
+      const nodes = { ...s.graph.nodes }
+      for (const n of snap.removed) {
+        // A reply that was streaming when deleted was aborted; don't bring it back "spinning".
+        const busy = n.status === 'streaming' || n.status === 'pending'
+        nodes[n.id] = busy ? { ...n, status: n.response ? 'done' : 'error', error: 'Stopped: deleted mid-reply' } : n
+      }
+      for (const orig of snap.patched) {
+        const cur = nodes[orig.id]
+        if (cur) nodes[orig.id] = { ...cur, parents: orig.parents, stale: orig.stale }
+      }
+      const graph = { ...s.graph, nodes, updatedAt: Date.now() }
+      const present = new Set(s.rfNodes.map((n) => n.id))
+      set({
+        graph,
+        rfNodes: [...s.rfNodes, ...snap.rf.filter((n) => !present.has(n.id)).map((n) => ({ ...n, selected: false }))],
+        pathSet: contextNodeSet(graph, s.selection),
+        structVersion: s.structVersion + 1,
+      })
+      return true
     },
 
     async runDialogue(cfg) {
@@ -523,15 +568,26 @@ if (import.meta.hot) {
   import.meta.hot.accept(() => setTimeout(() => window.location.reload(), 150))
 }
 
-/** Confirm, then delete — shared by the keyboard shortcut, node button and inspector. */
-export function confirmDelete(ids: string[]) {
+/**
+ * Delete now, offer Undo — shared by the node button, the inspector and the Delete key.
+ * No window.confirm(): embedded browsers (such as the Claude app's pane) suppress native
+ * dialogs and silently answer "Cancel", which made delete look broken.
+ */
+export function deleteWithUndo(ids: string[]) {
   const s = useStore.getState()
-  if (!ids.length) return
-  const kill = deletionClosure(s.graph, ids)
-  const extra = kill.size - ids.length
-  const msg =
-    `Delete ${ids.length} node${ids.length > 1 ? 's' : ''}` +
-    (extra > 0 ? ` and ${extra} descendant${extra > 1 ? 's' : ''} that depend only on ${ids.length > 1 ? 'them' : 'it'}` : '') +
-    '?'
-  if (window.confirm(msg)) s.deleteNodes(ids)
+  const snap = s.deleteNodes(ids)
+  if (!snap) return
+  const n = snap.removed.length
+  const extra = n - ids.length
+  s.showToast(
+    `Deleted ${n} node${n === 1 ? '' : 's'}` +
+      (extra > 0 ? ` (${extra} descendant${extra === 1 ? '' : 's'} with no other parent)` : ''),
+    'info',
+    {
+      label: 'Undo',
+      run: () => {
+        if (useStore.getState().restoreDeleted(snap)) useStore.getState().showToast('Restored')
+      },
+    },
+  )
 }

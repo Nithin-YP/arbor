@@ -11,7 +11,7 @@ import {
   RotateCcw,
   Trash,
 } from 'lucide-react'
-import { confirmDelete, useStore, type Tab } from '../store'
+import { deleteWithUndo, useStore, type Tab } from '../store'
 import { childrenMap, contextFor, estimateTokens, previewFor, transcriptOf } from '../lib/context'
 import { cx, fmtTokens, modelColor, shortModel, timeAgo } from '../lib/util'
 import type { Turn } from '../types'
@@ -248,7 +248,7 @@ function NodeTab() {
         >
           <Copy size={14} /> Copy reply
         </button>
-        <button className="btn danger" onClick={() => confirmDelete([n.id])}>
+        <button className="btn danger" onClick={() => deleteWithUndo([n.id])}>
           <Trash size={14} /> Delete
         </button>
       </div>

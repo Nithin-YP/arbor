@@ -37,10 +37,13 @@ export function LibraryModal() {
     await refresh()
   }
 
+  // Two-step, in-app confirmation: native confirm() is suppressed in embedded browsers.
+  const [confirming, setConfirming] = useState<string | null>(null)
   const remove = async (m: GraphMeta) => {
-    if (!window.confirm(`Delete “${m.title}” (${m.nodeCount} nodes) from this browser? Export it first if you want a copy.`)) return
+    setConfirming(null)
     await deleteGraph(m.id)
     if (m.id === currentId) st().newGraph()
+    st().showToast(`Deleted “${m.title || 'Untitled'}”`)
     await refresh()
   }
 
@@ -77,7 +80,23 @@ export function LibraryModal() {
         <div className="panel-empty muted-text">Nothing saved yet. Graphs appear here once they have a node.</div>
       ) : (
         <div className="lib-list">
-          {items.map((m) => (
+          {items.map((m) =>
+            confirming === m.id ? (
+              <div key={m.id} className="lib-item confirming">
+                <div className="lib-main">
+                  <b>{m.title || 'Untitled'}</b>
+                  <span className="lib-confirm">
+                    Delete these {m.nodeCount} node{m.nodeCount === 1 ? '' : 's'} for good? Export first if you want a copy.
+                  </span>
+                </div>
+                <button className="btn small" onClick={() => setConfirming(null)} autoFocus>
+                  Cancel
+                </button>
+                <button className="btn small danger" onClick={() => void remove(m)}>
+                  <Trash size={13} /> Delete
+                </button>
+              </div>
+            ) : (
             <div key={m.id} className={cx('lib-item', m.id === currentId && 'current')} onClick={() => void open(m.id)}>
               <div className="lib-main">
                 <b>{m.title || 'Untitled'}</b>
@@ -101,13 +120,14 @@ export function LibraryModal() {
                 title="Delete"
                 onClick={(e) => {
                   e.stopPropagation()
-                  void remove(m)
+                  setConfirming(m.id)
                 }}
               >
                 <Trash size={14} />
               </button>
             </div>
-          ))}
+            ),
+          )}
         </div>
       )}
     </Modal>
