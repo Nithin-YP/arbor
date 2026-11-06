@@ -481,6 +481,15 @@ select.input { cursor: pointer; }
   animation: rise 0.2s ease-out;
 }
 .toast.error { border-color: rgba(248, 113, 113, 0.5); color: #ffc9c9; }
+.toast { display: flex; align-items: center; gap: 14px; }
+.toast-action {
+  margin-left: auto; padding: 4px 12px; border-radius: 8px;
+  border: 1px solid rgba(124, 156, 255, 0.45); background: var(--accent-soft);
+  color: var(--accent); font-weight: 600; font-size: 12.5px;
+}
+.toast-action:hover { background: rgba(124, 156, 255, 0.25); }
+.lib-item.confirming { border-color: rgba(248, 113, 113, 0.5); background: rgba(248, 113, 113, 0.06); cursor: default; }
+.lib-confirm { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #ffc2c2; }
 
 .status-pill { white-space: nowrap; flex: none; }
 .title-input { flex: 0 1 340px; min-width: 80px; }
@@ -499,6 +508,7 @@ select.input { cursor: pointer; }
   .thread-inner { padding: 18px 16px 230px; }
   .thread-head { padding: 0 16px; }
   .view-seg button span { display: none; }
+  .toast { top: 62px; bottom: auto; left: 14px; right: 14px; max-width: none; } /* keep clear of the composer */
 }
 
 /* ---------- thread-first reading surface ---------- */

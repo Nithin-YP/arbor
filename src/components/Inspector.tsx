@@ -14,7 +14,7 @@ import {
   Search,
   Trash,
 } from 'lucide-react'
-import { confirmDelete, useStore, type Tab } from '../store'
+import { deleteWithUndo, useStore, type Tab } from '../store'
 import {
   EXCLUSION_HINT,
   EXCLUSION_LABEL,
@@ -352,7 +352,7 @@ function NodeTab() {
         >
           <Copy size={14} /> Copy reply
         </button>
-        <button className="btn danger" onClick={() => confirmDelete([n.id])}>
+        <button className="btn danger" onClick={() => deleteWithUndo([n.id])}>
           <Trash size={14} /> Delete
         </button>
       </div>

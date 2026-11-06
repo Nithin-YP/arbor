@@ -1,6 +1,6 @@
 import { useEffect, useState, type DragEvent } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
-import { confirmDelete, LAST_KEY, useStore } from './store'
+import { deleteWithUndo, LAST_KEY, useStore } from './store'
 import { loadGraphById, parseGraphFile, sanitizeGraph, saveGraph } from './lib/persist'
 import { cx } from './lib/util'
 import { TopBar } from './components/TopBar'
@@ -75,13 +75,18 @@ function useShortcuts() {
         if (e.key === 'Escape') target.blur()
         return
       }
-      if (e.key === 'Escape') st().select([])
+      const undo = st().toast?.action
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && undo) {
+        e.preventDefault()
+        st().toast && useStore.setState({ toast: null })
+        undo.run()
+      } else if (e.key === 'Escape') st().select([])
       else if (e.key === '/') {
         e.preventDefault()
         st().focusComposer()
       } else if ((e.key === 'Delete' || e.key === 'Backspace') && st().selection.length) {
         e.preventDefault()
-        confirmDelete(st().selection)
+        deleteWithUndo(st().selection)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -92,9 +97,22 @@ function useShortcuts() {
 function Toast() {
   const toast = useStore((s) => s.toast)
   if (!toast) return null
+  const action = toast.action
   return (
-    <div key={toast.id} className={cx('toast', toast.kind)}>
-      {toast.text}
+    <div key={toast.id} className={cx('toast', toast.kind)} role="status">
+      <span>{toast.text}</span>
+      {action && (
+        <button
+          className="toast-action"
+          title={`${action.label} (Ctrl+Z)`}
+          onClick={() => {
+            useStore.setState({ toast: null })
+            action.run()
+          }}
+        >
+          {action.label}
+        </button>
+      )}
     </div>
   )
 }

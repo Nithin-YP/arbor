@@ -1,7 +1,7 @@
 import { memo, type CSSProperties, type MouseEvent, type ReactNode } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { Brain, Eye, EyeOff, GitBranch, GitMerge, Layers, LoaderCircle, RotateCcw, Square, Trash } from 'lucide-react'
-import { confirmDelete, useStore } from '../store'
+import { deleteWithUndo, useStore } from '../store'
 import { branchLabel } from '../lib/context'
 import { cx, fmtTokens, modelColor, shortModel } from '../lib/util'
 import { Markdown } from './Markdown'
@@ -151,7 +151,7 @@ function ChatNodeImpl({ id, selected }: NodeProps) {
           </IconBtn>
         )}
         <span className="grow" />
-        <IconBtn title="Delete" danger onClick={() => confirmDelete([id])}>
+        <IconBtn title="Delete (Undo available)" danger onClick={() => deleteWithUndo([id])}>
           <Trash size={14} />
         </IconBtn>
       </footer>
