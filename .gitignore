@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.local
+.vite/
+
+# editor / local tooling
+.vscode/
+.idea/
+.claude/
+.DS_Store
+Thumbs.db
+
+# logs
+npm-debug.log*
+*.log
